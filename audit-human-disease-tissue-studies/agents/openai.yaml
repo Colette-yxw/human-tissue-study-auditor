@@ -1,0 +1,4 @@
+interface:
+  display_name: "Human Tissue Study Auditor"
+  short_description: "Audit omics studies for direct human disease tissue"
+  default_prompt: "Use $audit-human-disease-tissue-studies to audit this omics workbook for direct human disease-tissue studies and add evidence-backed results."
