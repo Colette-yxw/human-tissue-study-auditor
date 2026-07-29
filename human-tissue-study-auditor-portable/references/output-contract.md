@@ -20,6 +20,40 @@ Append these columns to the copied source sheet:
 | PMID | Text identifier |
 | Publication match basis | Exact accession/title/sample/method link establishing the match |
 
+## Row and field completeness contract
+
+- Copy every source row exactly once and retain original order.
+- Keep all original columns and values unchanged.
+- Define `source data rows` as used rows excluding the header.
+- Require `Audit_Results data rows = source data rows`.
+- Do not filter out obvious negative rows before creating `Audit_Results`.
+- For every row, require nonblank values in:
+  - `Checkbox`
+  - `Research subject`
+  - `Disease relevance`
+  - `Study type`
+  - `Confidence`
+  - `Original evidence quote`
+  - `Evidence location`
+  - `Personalized explanation (YES rows re-reviewed)`
+  - `Official source URL` when an accession is available
+  - `Tissue type`
+  - `Publication match basis`
+- Publication title, URL, DOI, and PMID may remain blank only when no conservative match is asserted.
+
+## Per-row gate record
+
+Before finalizing each row, create a structured intermediate record:
+
+```text
+Source row/key:
+Disease Gate: PASS or FAIL — decisive reason/evidence
+Material Gate: PASS, FAIL, or UNPROVEN — material and handling evidence
+Final checkbox: ☑ only for PASS + PASS; otherwise ☐
+```
+
+The final personalized explanation must communicate both gate outcomes. This is an auditable verification protocol, not a request to expose private hidden reasoning.
+
 ## Evidence quality hierarchy
 
 1. Sample-level `source_name`, characteristics, treatment, extraction, and culture protocol.
@@ -71,3 +105,14 @@ For every `YES` row verify:
 | Consistency | Type, tissue, quote, and explanation agree |
 
 For every disease-relevant `NO`, verify that the exact exclusion mechanism is named and evidenced.
+
+Before delivery also verify:
+
+| Preservation check | Required result |
+|---|---|
+| Source data-row count | Recorded |
+| Audit data-row count | Exactly equal |
+| Original row keys | One-to-one match |
+| Original order | Unchanged |
+| Original values | Unchanged |
+| Required audit fields | Nonblank for every row |
