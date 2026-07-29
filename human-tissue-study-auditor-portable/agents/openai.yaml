@@ -1,0 +1,4 @@
+interface:
+  display_name: "Human Tissue Study Auditor"
+  short_description: "Strictly audit disease-related direct human tissue studies"
+  default_prompt: "Use $human-tissue-study-auditor-portable to audit this omics inventory for direct human disease tissue experiments."
