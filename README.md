@@ -72,5 +72,4 @@ editing requires an Excel-capable tool or a separate Hermes spreadsheet workflow
 
 ## Access
 
-This repository is private. Only collaborators explicitly invited by the owner can
-view or install the skill.
+This repository is public. Feel free to download it.
