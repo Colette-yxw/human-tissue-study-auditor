@@ -22,21 +22,35 @@ Mark `YES/☑` only when both gates pass:
 
 If either gate fails or remains unproven, mark `NO/☐`.
 
+## Row preservation invariant
+
+- Preserve every source data row exactly once, in the original order.
+- Require `Audit_Results data-row count == source data-row count` before export.
+- Never pre-filter, delete, deduplicate, collapse, or omit rows before or during classification.
+- Keep obvious cell-line, animal, organoid, wrong-disease, and irrelevant rows. Mark them `NO/☐` and document the exclusion.
+- Preserve every original column and value. Add audit columns only.
+- Treat any row-count mismatch, missing source identifier, duplicated source row, or reordered row as a failed audit that must not be delivered.
+
 ## Workflow
 
 1. **Inspect before editing**
    - Identify the exact source sheet and whether each row represents a project, study, sample, or experiment.
+   - Record the source data-row count excluding the header, the total used-row count including the header, and a stable row key such as source row number plus accession/sample identifier.
    - Preserve all source values, sheets, identifiers, and formatting.
    - Render or preview the source sheet when possible.
-   - Copy the source sheet to `Audit_Results`.
+   - Copy the complete source sheet to `Audit_Results` before classification. Do not create `Audit_Results` from a filtered candidate subset.
 
 2. **Define the target**
    - Record the exact disease and whether native blood, PBMC, BAL, CSF, sputum, swabs, or freshly sorted cells are eligible.
    - Unless the user narrows the scope, treat native human biospecimens as eligible.
 
-3. **Read every row as a unit**
+3. **Run the two-gate verification for every row**
    - Read title, abstract, overall design, organism, tissue, source name, cell type, treatment, sample characteristics, protocols, and accessions together.
-   - Classify disease relevance independently from study type.
+   - Answer `Disease Gate: PASS/FAIL` with a short evidence-backed reason.
+   - Answer `Material Gate: PASS/FAIL/UNPROVEN` with the measured material and post-collection handling.
+   - Set `☑` only for `PASS + PASS`; all other combinations must be `☐`.
+   - Record both gate outcomes in structured working data before writing the final row. Do not rely on keyword impressions.
+   - Classify disease relevance independently from study type and material handling.
    - Describe the research subject with a short precise phrase; retain multi-word concepts.
 
 4. **Build a candidate set**
@@ -60,16 +74,20 @@ If either gate fails or remains unproven, mark `NO/☐`.
    - Never use generated ellipses, paraphrases, mechanically joined fields, or a general disease-background sentence as evidence.
 
 8. **Populate every audit field**
-   - Fill classification, evidence, location, tissue type, and personalized explanation for every row.
+   - Fill `Research subject`, `Disease relevance`, `Study type`, `Confidence`, evidence quote, evidence location, tissue type, and personalized explanation for every row, including every `NO/☐` row.
+   - Make each personalized explanation state both gate results in prose: whether the disease gate passed and whether the material gate passed.
+   - Do not leave required audit fields blank merely because a row is excluded.
    - Never output `NA` as normalized tissue type; use `Not reported / unclear` only after checking all available sources.
    - Match publications conservatively. Leave DOI/PMID/title blank rather than guessing.
 
 9. **Run the consistency gate**
+   - Recount rows and verify one-to-one correspondence with the source before any other QC.
+   - Compare stable row keys and source-column values to ensure no row was deleted, duplicated, reordered, or altered.
    - Recheck all `YES` rows and every disease-relevant `NO`.
    - Confirm evidence is verbatim and actionable.
    - Confirm study type, tissue type, quote, and explanation refer to the same measured material.
    - Confirm no `YES` row contains post-collection culture or perturbation unless a separate direct-tissue arm is explicitly identified at project level.
-   - Run `scripts/validate_audit.py` on a CSV export when possible.
+   - Run `scripts/validate_audit.py` on a CSV export with `--source-csv` or `--expected-rows` when possible.
 
 10. **Deliver**
     - Preserve the source workbook.
@@ -91,6 +109,7 @@ For `NO`, name the actual model/material and the decisive exclusion reason. Do n
 ## Stop conditions
 
 - Do not include an ambiguous row to increase recall.
+- Do not deliver if source and audit row counts differ.
 - Do not invent missing handling details.
 - Do not infer “cultured” merely from `primary` or `cells`.
 - Do not infer direct tissue merely from `patient-derived`.
