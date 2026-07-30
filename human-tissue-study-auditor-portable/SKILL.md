@@ -11,6 +11,7 @@ Read these files before classification:
 
 - [references/decision-rules.md](references/decision-rules.md)
 - [references/output-contract.md](references/output-contract.md)
+- [references/intermediate-record.md](references/intermediate-record.md)
 - [references/platform-use.md](references/platform-use.md) when the model does not support native skills or file tools.
 
 ## Core invariant
@@ -58,7 +59,9 @@ If either gate fails or remains unproven, mark `NO/☐`.
    - Answer `Disease Gate: PASS/FAIL` with a short evidence-backed reason.
    - Answer `Material Gate: PASS/FAIL/UNPROVEN` with the measured material and post-collection handling.
    - Set `☑` only for `PASS + PASS`; all other combinations must be `☐`.
-   - Record both gate outcomes in structured working data before writing the final row. Do not rely on keyword impressions.
+   - Create the mandatory structured gate record defined in
+     `references/intermediate-record.md` before writing the final row. Do not rely on
+     keyword impressions or prose such as “after full-field search.”
    - Before setting Disease Gate to `FAIL` or `UNPROVEN`, search every source field for
      the target disease name, abbreviation, spelling variants, and relevant subtype.
      Record which fields matched. Never declare disease evidence absent while the title,
@@ -88,8 +91,13 @@ If either gate fails or remains unproven, mark `NO/☐`.
      if the title says “expanded in SLE blood.”
 
 6. **Handle row granularity correctly**
+   - Assign every row `project`, `study`, `sample`, or `experiment` granularity before
+     applying either gate.
    - For a project-level row, a separately identifiable qualifying human-tissue arm can justify inclusion; explicitly state which arm qualifies and which arms do not.
    - For a sample-level row, judge only that sample. Do not rescue a cultured sample because the larger project also contains tissue.
+   - For project/study rows, enumerate every independent dataset/arm named in title,
+     abstract, overall design, sample list, or official record. A representative
+     sample's `treatment`, `diagnosis`, or `conditions` must not overwrite other arms.
 
 7. **Capture decisive evidence**
    - Quote one or two complete, verbatim passages proving the decisive fact.
@@ -132,6 +140,8 @@ If either gate fails or remains unproven, mark `NO/☐`.
      preferable to guessing, but do not skip the official-record/publication search for
      possible inclusions.
    - Run `scripts/validate_audit.py` on a CSV export with `--source-csv` or `--expected-rows` when possible.
+   - Always pass `--gate-records` and `--target-terms` for a disease audit. Treat any
+     validation error as a stop condition, not a warning.
 
 10. **Deliver**
     - Preserve the source workbook.
@@ -154,6 +164,14 @@ For `NO`, name the actual model/material and the decisive exclusion reason. Do n
 
 - Do not include an ambiguous row to increase recall.
 - Do not deliver if source and audit row counts differ.
+- Do not deliver if the structured gate-record count differs from the source row count.
+- Do not deliver with unresolved disease-alias or handling conflicts.
+- Do not deliver when a target alias is present but its exact field and passage are
+  absent from the gate record.
+- Do not deliver a project/study row with multiple datasets/arms unless qualifying and
+  excluded arms were enumerated.
+- Do not deliver when a local quote fails exact per-passage substring validation.
+- Do not deliver when an identical personalized explanation appears on more than two rows.
 - Do not invent missing handling details.
 - Do not infer “cultured” merely from `primary` or `cells`.
 - Do not infer direct tissue merely from `patient-derived`.

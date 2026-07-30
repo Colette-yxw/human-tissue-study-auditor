@@ -49,14 +49,9 @@ Append these columns to the copied source sheet:
 
 ## Per-row gate record
 
-Before finalizing each row, create a structured intermediate record:
-
-```text
-Source row/key:
-Disease Gate: PASS or FAIL — decisive reason/evidence
-Material Gate: PASS, FAIL, or UNPROVEN — material and handling evidence
-Final checkbox: ☑ only for PASS + PASS; otherwise ☐
-```
+Before finalizing each row, create the JSON/CSV record defined in
+`intermediate-record.md`, including source key, granularity, field-level disease hits,
+handling conflicts, project arms, both gates, and final checkbox.
 
 The final personalized explanation must communicate both gate outcomes. This is an auditable verification protocol, not a request to expose private hidden reasoning.
 
@@ -149,3 +144,6 @@ Also report:
   matching handling statement in the cited evidence.
 
 Required result for each report: zero unresolved rows.
+
+The structured gate-record file is mandatory working evidence. Its row count and
+source keys must match the locked source sheet one-to-one.

@@ -1,4 +1,4 @@
 interface:
   display_name: "Human Tissue Study Auditor"
   short_description: "Audit direct human disease tissue studies"
-  default_prompt: "Use $human-tissue-study-auditor-portable to audit every row of this omics inventory, lock the exact source sheet, and resolve disease and handling conflicts."
+  default_prompt: "Use $human-tissue-study-auditor-portable to audit every row, create mandatory structured gate records, resolve disease and handling conflicts, and validate before export."

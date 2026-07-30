@@ -3,6 +3,7 @@
 
 import argparse
 import csv
+import json
 import re
 import sys
 from collections import Counter
@@ -39,6 +40,51 @@ HANDLING_CONFLICT = re.compile(
     re.I,
 )
 
+GRANULARITIES = {"project", "study", "sample", "experiment"}
+DISEASE_GATES = {"PASS", "FAIL"}
+MATERIAL_GATES = {"PASS", "FAIL", "UNPROVEN"}
+HIT_ROLES = {"measured_cohort", "background", "unclear"}
+HANDLING_RESOLUTIONS = {
+    "ex_vivo_exclusion",
+    "patient_in_vivo_treatment",
+    "separate_nonqualifying_arm",
+    "background_only",
+    "unresolved",
+}
+
+
+def load_gate_records(path):
+    if path.suffix.lower() == ".json":
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, list):
+            raise ValueError("gate-record JSON must be a list")
+        return data
+    with path.open(encoding="utf-8-sig", newline="") as handle:
+        records = list(csv.DictReader(handle))
+    for record in records:
+        for field in (
+            "disease_alias_hits",
+            "handling_conflicts",
+            "qualifying_arms",
+            "excluded_arms",
+        ):
+            value = record.get(field, "")
+            if value:
+                record[field] = json.loads(value)
+            else:
+                record[field] = []
+    return records
+
+
+def quote_passages(quote):
+    passages = []
+    for line in re.split(r"\r?\n+", quote):
+        line = line.strip().strip("\"'“”")
+        line = re.sub(r"^[-•]\s*", "", line)
+        if line:
+            passages.append(line)
+    return passages
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -61,6 +107,11 @@ def main():
         "--strict-local-quotes",
         action="store_true",
         help="Require every evidence quote to occur verbatim in one original source cell.",
+    )
+    parser.add_argument(
+        "--gate-records",
+        type=Path,
+        help="Mandatory JSON/CSV structured gate records for a full disease audit.",
     )
     args = parser.parse_args()
 
@@ -108,6 +159,28 @@ def main():
                     f"row {index}: original values/order changed in columns "
                     + ", ".join(changed[:8])
                 )
+
+    gate_records = []
+    gate_by_row = {}
+    if args.gate_records:
+        try:
+            gate_records = load_gate_records(args.gate_records)
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            errors.append(f"cannot read gate records: {exc}")
+        if gate_records and len(gate_records) != len(rows):
+            errors.append(
+                "gate-record preservation failure: "
+                f"audit has {len(rows)} rows, gate records have {len(gate_records)}"
+            )
+        for record in gate_records:
+            try:
+                source_row = int(record.get("source_row"))
+            except (TypeError, ValueError):
+                errors.append("gate record has invalid source_row")
+                continue
+            if source_row in gate_by_row:
+                errors.append(f"duplicate gate record for source row {source_row}")
+            gate_by_row[source_row] = record
 
     required_nonblank = [
         "Research subject",
@@ -163,10 +236,14 @@ def main():
             source_row = source_rows[number - 2]
             source_text = " | ".join(source_row.get(name, "") for name in source_headers)
             if args.strict_local_quotes and quote:
-                if not any(quote in source_row.get(name, "") for name in source_headers):
-                    errors.append(
-                        f"row {number}: evidence quote is not an exact substring of any original source cell"
-                    )
+                for passage in quote_passages(quote):
+                    if not any(
+                        passage in source_row.get(name, "") for name in source_headers
+                    ):
+                        errors.append(
+                            f"row {number}: evidence passage is not an exact substring "
+                            f"of any original source cell: {passage[:120]}"
+                        )
             if checkbox == "☑":
                 conflict = HANDLING_CONFLICT.search(source_text)
                 if conflict:
@@ -204,6 +281,149 @@ def main():
                             f"row {number}: target term '{disease_hit}' occurs in source, "
                             "but disease relevance is not direct and background status is unresolved"
                         )
+
+            if args.gate_records:
+                record = gate_by_row.get(number)
+                if not record:
+                    errors.append(f"row {number}: missing structured gate record")
+                else:
+                    granularity = str(record.get("granularity", "")).strip().lower()
+                    disease_gate = str(record.get("disease_gate", "")).strip().upper()
+                    material_gate = str(record.get("material_gate", "")).strip().upper()
+                    record_checkbox = str(record.get("final_checkbox", "")).strip()
+                    disease_hits = record.get("disease_alias_hits") or []
+                    handling_hits = record.get("handling_conflicts") or []
+                    qualifying_arms = record.get("qualifying_arms") or []
+                    excluded_arms = record.get("excluded_arms") or []
+
+                    if granularity not in GRANULARITIES:
+                        errors.append(f"row {number}: invalid gate-record granularity")
+                    if disease_gate not in DISEASE_GATES:
+                        errors.append(f"row {number}: invalid disease_gate")
+                    if material_gate not in MATERIAL_GATES:
+                        errors.append(f"row {number}: invalid material_gate")
+                    expected_checkbox = (
+                        "☑"
+                        if disease_gate == "PASS" and material_gate == "PASS"
+                        else "☐"
+                    )
+                    if record_checkbox != expected_checkbox or checkbox != expected_checkbox:
+                        errors.append(
+                            f"row {number}: gate-record decision does not match PASS+PASS rule"
+                        )
+                    if (disease_gate == "PASS") != (relevance == "direct"):
+                        errors.append(
+                            f"row {number}: disease_gate and Disease relevance disagree"
+                        )
+
+                    source_key = str(record.get("source_key", "")).strip()
+                    if not source_key:
+                        errors.append(f"row {number}: blank gate-record source_key")
+                    elif source_key not in {
+                        str(source_row.get(name, "")).strip() for name in source_headers
+                    }:
+                        errors.append(
+                            f"row {number}: gate-record source_key not found in source row"
+                        )
+
+                    for hit in disease_hits:
+                        field = str(hit.get("field", "")).strip()
+                        alias = str(hit.get("alias", "")).strip()
+                        passage = str(hit.get("passage", "")).strip()
+                        role = str(hit.get("role", "")).strip()
+                        if field not in source_headers:
+                            errors.append(
+                                f"row {number}: disease hit uses unknown field '{field}'"
+                            )
+                            continue
+                        if not passage or passage not in source_row.get(field, ""):
+                            errors.append(
+                                f"row {number}: disease-hit passage is not verbatim in field '{field}'"
+                            )
+                        if not alias or alias.lower() not in passage.lower():
+                            errors.append(
+                                f"row {number}: disease-hit passage does not contain its alias"
+                            )
+                        if role not in HIT_ROLES:
+                            errors.append(f"row {number}: invalid disease-hit role")
+                        if disease_gate == "FAIL" and role != "background":
+                            errors.append(
+                                f"row {number}: non-PASS disease hit is not resolved as background"
+                            )
+
+                    if args.target_terms:
+                        aliases = [
+                            term.strip()
+                            for term in args.target_terms.split(",")
+                            if term.strip()
+                        ]
+                        for field in source_headers:
+                            value = source_row.get(field, "")
+                            for alias in aliases:
+                                if alias.lower() in value.lower():
+                                    covered = any(
+                                        str(hit.get("field", "")).strip() == field
+                                        and str(hit.get("alias", "")).strip().lower()
+                                        == alias.lower()
+                                        and str(hit.get("passage", "")).strip() in value
+                                        for hit in disease_hits
+                                    )
+                                    if not covered:
+                                        errors.append(
+                                            f"row {number}: target alias '{alias}' in field "
+                                            f"'{field}' is absent from the gate record"
+                                        )
+
+                    handling_fields = {
+                        field
+                        for field in source_headers
+                        if HANDLING_CONFLICT.search(source_row.get(field, ""))
+                    }
+                    recorded_handling_fields = {
+                        str(hit.get("field", "")).strip() for hit in handling_hits
+                    }
+                    for field in sorted(handling_fields - recorded_handling_fields):
+                        errors.append(
+                            f"row {number}: handling conflict in field '{field}' is absent "
+                            "from the gate record"
+                        )
+                    for hit in handling_hits:
+                        field = str(hit.get("field", "")).strip()
+                        passage = str(hit.get("passage", "")).strip()
+                        resolution = str(hit.get("resolution", "")).strip()
+                        if field not in source_headers:
+                            errors.append(
+                                f"row {number}: handling hit uses unknown field '{field}'"
+                            )
+                            continue
+                        if not passage or passage not in source_row.get(field, ""):
+                            errors.append(
+                                f"row {number}: handling passage is not verbatim in field '{field}'"
+                            )
+                        if resolution not in HANDLING_RESOLUTIONS:
+                            errors.append(f"row {number}: invalid handling resolution")
+                        if resolution == "unresolved":
+                            errors.append(
+                                f"row {number}: unresolved handling conflict blocks export"
+                            )
+
+                    has_multiple_arms = re.search(
+                        r"\b(?:dataset|arm)s?\b|independent datasets?",
+                        source_text,
+                        re.I,
+                    )
+                    if granularity in {"project", "study"} and has_multiple_arms:
+                        if not qualifying_arms and not excluded_arms:
+                            errors.append(
+                                f"row {number}: project/study has multiple arms but none "
+                                "were enumerated"
+                            )
+                        if disease_gate == "PASS" and handling_fields:
+                            if not qualifying_arms or not excluded_arms:
+                                errors.append(
+                                    f"row {number}: mixed project requires both qualifying "
+                                    "and excluded arm lists"
+                                )
 
         for field in ("Publication title", "Publication URL", "DOI", "PMID"):
             if row.get(field, "").strip().lower() in {"na", "n/a", "unknown"}:

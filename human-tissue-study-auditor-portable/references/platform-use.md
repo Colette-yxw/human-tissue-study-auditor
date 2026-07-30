@@ -27,6 +27,12 @@ Require this per-row verification:
 
 > 对每一行先形成结构化检查记录：Disease Gate = PASS/FAIL；Material Gate = PASS/FAIL/UNPROVEN；只有 PASS + PASS 才能勾选。最终 Personalized explanation 必须同时说明疾病门槛和材料门槛，所有 NO 行也必须填写 Research subject、Study type、证据和解释。
 
+Require the uploaded `references/intermediate-record.md` schema, not a prose substitute:
+
+> 必须先输出与源表一一对应的 gate_records.json。每条记录包含 granularity、逐字段 disease_alias_hits、handling_conflicts、qualifying_arms、excluded_arms、Disease Gate、Material Gate 和 final_checkbox。只写“after full-field search”不算完成疾病扫描。
+
+> 对 project/study 行，必须解析 Overall design 与完整样本列表中的全部独立 dataset/arm；禁止用一个代表样本的 treatment/diagnosis/conditions 覆盖整个项目。对 sample/experiment 行，只能判断当前行。
+
 Add these Grok/Qwen anti-error checks:
 
 > 在把 Disease Gate 判为 UNPROVEN/FAIL 之前，必须搜索该行所有字段中的目标疾病全称、缩写、拼写变体和亚型。若 abstract/overall design/diagnosis/phenotype 明确写了目标疾病患者，禁止声称“没有疾病证据”；必须判断它是病例组还是仅背景。
