@@ -5,6 +5,7 @@ import argparse
 import csv
 import re
 import sys
+from collections import Counter
 from pathlib import Path
 
 REQUIRED = [
@@ -31,6 +32,13 @@ PERTURBED = re.compile(
     re.I,
 )
 
+HANDLING_CONFLICT = re.compile(
+    r"\bin vitro\b|cultured?|passages?|passaged|th0|co-?culture|stimulat(?:ed|ion)|"
+    r"treat(?:ed|ment)|vehicle|mock|infect(?:ed|ion)|transfect(?:ed|ion)|"
+    r"knockdown|differentiat(?:ed|ion)|incubat(?:ed|ion)",
+    re.I,
+)
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -44,6 +52,15 @@ def main():
         "--expected-rows",
         type=int,
         help="Expected number of audit data rows, excluding the header.",
+    )
+    parser.add_argument(
+        "--target-terms",
+        help="Comma-separated target-disease aliases used for disease-conflict checks.",
+    )
+    parser.add_argument(
+        "--strict-local-quotes",
+        action="store_true",
+        help="Require every evidence quote to occur verbatim in one original source cell.",
     )
     args = parser.parse_args()
 
@@ -61,6 +78,8 @@ def main():
             f"row preservation failure: expected {args.expected_rows} data rows, found {len(rows)}"
         )
 
+    source_rows = []
+    source_headers = []
     if args.source_csv:
         with args.source_csv.open(encoding="utf-8-sig", newline="") as handle:
             source_reader = csv.DictReader(handle)
@@ -122,15 +141,86 @@ def main():
             errors.append(f"row {number}: invalid confidence")
         if not tissue or tissue.upper() == "NA":
             errors.append(f"row {number}: missing/NA tissue type")
-        if not quote or quote.endswith(("...", "…")):
-            errors.append(f"row {number}: missing or truncated evidence quote")
+        if not quote or "..." in quote or "…" in quote:
+            errors.append(f"row {number}: missing, spliced, or truncated evidence quote")
         if not explanation:
             errors.append(f"row {number}: blank personalized explanation")
         if checkbox == "☑" and relevance != "direct":
             errors.append(f"row {number}: checked row is not disease-direct")
+        if (
+            checkbox == "☐"
+            and relevance == "direct"
+            and re.search(r"human (?:tissue|biospecimen) \(direct\)", study_type, re.I)
+        ):
+            errors.append(
+                f"row {number}: decision contradiction — disease is direct and study type is direct human material, but checkbox is NO"
+            )
         if checkbox == "☑" and PERTURBED.search(study_type):
             if not study_type.lower().startswith("mixed direct human tissue"):
                 errors.append(f"row {number}: checked row classified as cultured/perturbed")
+
+        if source_rows and number - 2 < len(source_rows):
+            source_row = source_rows[number - 2]
+            source_text = " | ".join(source_row.get(name, "") for name in source_headers)
+            if args.strict_local_quotes and quote:
+                if not any(quote in source_row.get(name, "") for name in source_headers):
+                    errors.append(
+                        f"row {number}: evidence quote is not an exact substring of any original source cell"
+                    )
+            if checkbox == "☑":
+                conflict = HANDLING_CONFLICT.search(source_text)
+                if conflict:
+                    resolved = re.search(
+                        r"\bin vivo\b|clinical trial|patient treatment|separate(?:ly)? "
+                        r"(?:identifiable )?(?:arm|dataset)|mixed",
+                        explanation,
+                        re.I,
+                    )
+                    if not resolved:
+                        errors.append(
+                            f"row {number}: checked row has unresolved handling-conflict term "
+                            f"'{conflict.group(0)}'"
+                        )
+
+            if args.target_terms:
+                aliases = [
+                    term.strip()
+                    for term in args.target_terms.split(",")
+                    if term.strip()
+                ]
+                disease_hit = next(
+                    (term for term in aliases if term.lower() in source_text.lower()),
+                    None,
+                )
+                if disease_hit and relevance != "direct":
+                    resolved_background = re.search(
+                        r"background|背景|仅.{0,8}(?:提及|相关)|not (?:the )?"
+                        r"(?:measured|study|patient|cohort)|wrong disease",
+                        explanation,
+                        re.I,
+                    )
+                    if not resolved_background:
+                        errors.append(
+                            f"row {number}: target term '{disease_hit}' occurs in source, "
+                            "but disease relevance is not direct and background status is unresolved"
+                        )
+
+        for field in ("Publication title", "Publication URL", "DOI", "PMID"):
+            if row.get(field, "").strip().lower() in {"na", "n/a", "unknown"}:
+                errors.append(
+                    f"row {number}: use blank, not '{row.get(field)}', for unmatched {field}"
+                )
+
+    duplicate_explanations = Counter(
+        row.get("Personalized explanation (YES rows re-reviewed)", "").strip()
+        for row in rows
+        if row.get("Personalized explanation (YES rows re-reviewed)", "").strip()
+    )
+    for explanation_text, count in duplicate_explanations.items():
+        if count > 2:
+            errors.append(
+                f"generic explanation reuse: identical personalized explanation appears {count} times"
+            )
 
     if errors:
         print("\n".join(errors))

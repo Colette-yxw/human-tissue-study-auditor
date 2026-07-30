@@ -11,6 +11,27 @@
 
 Use only `direct` or `no` for disease relevance unless the user requests another scale.
 
+### Disease-evidence completeness check
+
+Before assigning Disease Gate `FAIL` or `UNPROVEN`, inspect all of:
+
+- title, abstract, study description, overall design;
+- disease/diagnosis/phenotype/health-state fields;
+- sample name, source name, characteristics and additional information;
+- target disease abbreviation, full name, spelling variants and subtypes.
+
+If any field explicitly says the measured patients or samples have the target disease,
+Disease Gate cannot be labelled “unproven.” It must be either:
+
+- `PASS`, when the target disease is the measured cohort/state; or
+- `FAIL`, with an explicit explanation that the mention is background only.
+
+Examples:
+
+- `Peripheral unstimulated T cell transcriptomes of 14 Lupus patients` → disease PASS.
+- `genes associated with IFNa ... in neutrophils and pDCs of SLE patients` → disease PASS.
+- `may have therapeutic relevance to SLE` in a cell-line paper → disease FAIL/background.
+
 ## 2. Include
 
 - Surgical, biopsy, frozen, resected, autopsy, transplant, or punch-biopsy human tissue with direct RNA/omics extraction.
@@ -40,6 +61,11 @@ Use only `direct` or `no` for disease relevance unless the user requests another
 
 The word `treatment` alone is not sufficient. Identify who or what received the treatment.
 
+Never infer ex-vivo manipulation merely because a study compares samples before and
+after therapy. `Patients treated with etanercept/adalimumab; blood or punch biopsies
+collected at visits` is in-vivo clinical treatment and remains direct material unless
+the removed sample itself was subsequently cultured or treated.
+
 ### “Primary” ambiguity
 
 - `Primary human tumor`, `primary tumor tissue`, `primary human biopsy` → may be direct tissue.
@@ -49,6 +75,11 @@ The word `treatment` alone is not sufficient. Identify who or what received the 
 
 Use `Freshly isolated human cells` only when cells were isolated/sorted and sequenced without documented later manipulation. Do not mention culture or stimulation unless evidence explicitly says so.
 
+Before using this label, search all sample-level fields for handling conflicts. An
+explicit `in vitro`, `Th0`, culture, co-culture, stimulation, treatment, infection,
+transfection, differentiation, or incubation field overrides a title suggesting cells
+came from patient blood.
+
 ### Untreated controls
 
 `Untreated`, `vehicle`, `mock`, or `control` does not restore direct-tissue status if the material was cultured, passaged, incubated, or transfected.
@@ -57,6 +88,18 @@ Use `Freshly isolated human cells` only when cells were isolated/sorted and sequ
 
 - Project-level row containing both full-thickness biopsies and cultured keratinocytes: include only if the direct biopsy arm is explicit; classify as mixed and explain the qualifying arm.
 - Sample-level cultured-keratinocyte row from that project: exclude.
+- Do not transfer a qualifying arm from one accession/project row to a different
+  accession that contains only the in-vitro arm, even when their titles are nearly
+  identical.
+
+### Title–sample contradiction
+
+When the title and sample metadata disagree about directness, sample handling wins.
+
+- Title: `CD4+ T cell population expanded in SLE blood`
+- Sample: `cell source;;in vitro | conditions;;Th0`
+- Result: Material Gate `FAIL`; classify as
+  `Primary human cells (ex vivo/cultured/perturbed)`.
 
 ### Disease-like terminology
 

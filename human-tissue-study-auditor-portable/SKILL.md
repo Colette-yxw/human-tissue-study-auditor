@@ -24,6 +24,15 @@ If either gate fails or remains unproven, mark `NO/☐`.
 
 ## Row preservation invariant
 
+- Lock the source scope before reading candidates. Record `source workbook`, exact
+  `source sheet`, header row, first/last data row, data-row count, and stable row key.
+- If the user names a sheet, use that exact sheet. Do not silently substitute a wider
+  sheet such as `Expanded_Data` or a narrower prefiltered sheet.
+- If the user says “entire dataset” and no sheet is named, use the workbook's complete
+  project inventory rather than a prefiltered subset. Report the selected sheet and
+  row count before classification.
+- If several sheets could reasonably be the source, do not mix them. Choose only after
+  comparing their purposes and row counts; state the choice in the delivery summary.
 - Preserve every source data row exactly once, in the original order.
 - Require `Audit_Results data-row count == source data-row count` before export.
 - Never pre-filter, delete, deduplicate, collapse, or omit rows before or during classification.
@@ -50,6 +59,17 @@ If either gate fails or remains unproven, mark `NO/☐`.
    - Answer `Material Gate: PASS/FAIL/UNPROVEN` with the measured material and post-collection handling.
    - Set `☑` only for `PASS + PASS`; all other combinations must be `☐`.
    - Record both gate outcomes in structured working data before writing the final row. Do not rely on keyword impressions.
+   - Before setting Disease Gate to `FAIL` or `UNPROVEN`, search every source field for
+     the target disease name, abbreviation, spelling variants, and relevant subtype.
+     Record which fields matched. Never declare disease evidence absent while the title,
+     abstract, description, overall design, diagnosis, phenotype, or sample
+     characteristics explicitly names a target-disease patient group.
+   - A disease keyword match is a retrieval trigger, not automatic inclusion. Decide
+     whether it names the measured cohort or only background context.
+   - Before setting Material Gate to `PASS`, run a handling-conflict sweep across every
+     field for `in vitro`, `culture`, `passage`, `Th0`, `co-culture`, `stimulation`,
+     `treatment`, `vehicle`, `mock`, `infection`, `transfection`, `knockdown`,
+     `differentiation`, and equivalent terms. Resolve every hit explicitly.
    - Classify disease relevance independently from study type and material handling.
    - Describe the research subject with a short precise phrase; retain multi-word concepts.
 
@@ -62,6 +82,10 @@ If either gate fails or remains unproven, mark `NO/☐`.
    - Prefer sample-level metadata and extraction/treatment protocols, then overall design, then the original paper.
    - Determine whether sequencing occurred directly or after culture, passage, differentiation, incubation, infection, stimulation, transfection, knockdown, or drug treatment.
    - Inspect the complete sample set before claiming the target tissue is absent.
+   - Apply evidence precedence: sample-level `cell source`, `conditions`, `treatment`,
+     culture/passaging and extraction fields override a disease-rich title or abstract.
+     For example, `cell source;;in vitro | conditions;;Th0` fails the material gate even
+     if the title says “expanded in SLE blood.”
 
 6. **Handle row granularity correctly**
    - For a project-level row, a separately identifiable qualifying human-tissue arm can justify inclusion; explicitly state which arm qualifies and which arms do not.
@@ -72,6 +96,12 @@ If either gate fails or remains unproven, mark `NO/☐`.
    - For `YES`, prove disease, human material, and direct collection/extraction.
    - For `NO`, prove the decisive failure: wrong disease, wrong material, culture, perturbation, animal model, organoid, or insufficient handling evidence.
    - Never use generated ellipses, paraphrases, mechanically joined fields, or a general disease-background sentence as evidence.
+   - Do not write `...` or `…` anywhere in an evidence quote. Do not join non-contiguous
+     passages with ellipses. Put two separately quoted passages on separate lines and
+     give each its own source field/location.
+   - For workbook evidence, verify programmatically that every quoted passage is an
+     exact substring of an original source cell. For website evidence, save the exact
+     URL, accession, section/field, and retrieved passage used for verification.
 
 8. **Populate every audit field**
    - Fill `Research subject`, `Disease relevance`, `Study type`, `Confidence`, evidence quote, evidence location, tissue type, and personalized explanation for every row, including every `NO/☐` row.
@@ -79,6 +109,11 @@ If either gate fails or remains unproven, mark `NO/☐`.
    - Do not leave required audit fields blank merely because a row is excluded.
    - Never output `NA` as normalized tissue type; use `Not reported / unclear` only after checking all available sources.
    - Match publications conservatively. Leave DOI/PMID/title blank rather than guessing.
+   - Never fill missing publication fields with `NA`, and never copy a study title or
+     abstract fragment into `Publication title` unless a publication match is proven.
+   - Do not reuse an identical generic exclusion explanation across unrelated rows.
+     Every claimed culture, stimulation, induction, treatment, or cell-line step must
+     be supported by that row's evidence.
 
 9. **Run the consistency gate**
    - Recount rows and verify one-to-one correspondence with the source before any other QC.
@@ -86,7 +121,16 @@ If either gate fails or remains unproven, mark `NO/☐`.
    - Recheck all `YES` rows and every disease-relevant `NO`.
    - Confirm evidence is verbatim and actionable.
    - Confirm study type, tissue type, quote, and explanation refer to the same measured material.
+   - Flag `Disease relevance = direct` + direct human tissue/biospecimen study type +
+     `Checkbox = ☐` as a decision contradiction unless the material gate is explicitly
+     unresolved and the study type is changed to `Unclear/other`.
    - Confirm no `YES` row contains post-collection culture or perturbation unless a separate direct-tissue arm is explicitly identified at project level.
+   - Run a disagreement audit: list all rows where disease evidence contains the target
+     term but Disease Gate is not `PASS`, and all checked rows containing any handling
+     conflict term. Manually resolve every listed row before export.
+   - Report publication metadata coverage (`matched title/DOI/PMID counts`). Blank is
+     preferable to guessing, but do not skip the official-record/publication search for
+     possible inclusions.
    - Run `scripts/validate_audit.py` on a CSV export with `--source-csv` or `--expected-rows` when possible.
 
 10. **Deliver**

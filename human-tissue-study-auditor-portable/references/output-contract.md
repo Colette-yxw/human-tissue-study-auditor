@@ -22,6 +22,10 @@ Append these columns to the copied source sheet:
 
 ## Row and field completeness contract
 
+- Include a preflight scope manifest in working notes:
+  `workbook | exact source sheet | header row | source data rows | stable key`.
+- Do not compare row counts across different source sheets. The audit count must match
+  the locked source sheet exactly.
 - Copy every source row exactly once and retain original order.
 - Keep all original columns and values unchanged.
 - Define `source data rows` as used rows excluding the header.
@@ -40,6 +44,8 @@ Append these columns to the copied source sheet:
   - `Tissue type`
   - `Publication match basis`
 - Publication title, URL, DOI, and PMID may remain blank only when no conservative match is asserted.
+  Use blank cells, not `NA`, `N/A`, `unknown`, a copied study title, or an abstract
+  fragment, when no publication match is established.
 
 ## Per-row gate record
 
@@ -70,6 +76,9 @@ A quote is acceptable only when:
 - it directly proves the decision;
 - it is a complete sentence or complete field value;
 - it is not cut off or ended with generated ellipses;
+- it contains no generated `...` or `…` anywhere;
+- if two passages are needed, they remain separate quotations with separate locations
+  rather than being spliced into one sentence;
 - its subject is the material actually measured in that row/project.
 
 Absence cannot be quoted. To exclude because target tissue is absent, cite the complete enumerated sample set and state that absence is an inference.
@@ -116,3 +125,27 @@ Before delivery also verify:
 | Original order | Unchanged |
 | Original values | Unchanged |
 | Required audit fields | Nonblank for every row |
+
+## Mandatory conflict reports
+
+Create and resolve these two temporary reports before export:
+
+1. **Disease conflict report:** every row containing a target-disease alias in any
+   source field where Disease Gate is not `PASS`. Confirm whether each occurrence is
+   measured-cohort evidence or background only.
+2. **Handling conflict report:** every checked row containing `in vitro`, `culture`,
+   `passage`, `Th0`, `co-culture`, `stimulation`, `treatment`, `vehicle`, `mock`,
+   `infection`, `transfection`, `knockdown`, `differentiation`, or `incubation`.
+   A checked row may remain checked only when the term refers to patient treatment in
+   vivo or a separately identifiable non-qualifying arm in a project-level mixed row.
+
+Report the number of unresolved conflicts. Required result: zero.
+
+Also report:
+
+- exact duplicate personalized explanations used on more than two rows;
+- rows with `direct` disease relevance and a direct-human study type but `☐`;
+- rows whose explanation asserts culture/stimulation/induction/treatment without a
+  matching handling statement in the cited evidence.
+
+Required result for each report: zero unresolved rows.
